@@ -35,7 +35,11 @@ impl Fixture {
     /// A fresh repository whose HEAD points at `refs/heads/main`.
     pub fn new() -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
-        let repo = gix::init(dir.path()).expect("init");
+        gix::init(dir.path()).expect("init");
+        // gix honours init.defaultBranch from system config (Git for Windows
+        // sets master), so pin HEAD for deterministic ref names.
+        std::fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/main\n").expect("HEAD");
+        let repo = gix::open(dir.path()).expect("open");
         Fixture { dir, repo }
     }
 

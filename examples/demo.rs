@@ -23,7 +23,13 @@ fn main() -> Result<()> {
     if std::path::Path::new(&dir).join(".git").exists() {
         bail!("{dir} already contains a repository");
     }
-    let repo = gix::init(&dir)?;
+    gix::init(&dir)?;
+    // Pin the branch name regardless of the system's init.defaultBranch.
+    std::fs::write(
+        std::path::Path::new(&dir).join(".git/HEAD"),
+        "ref: refs/heads/main\n",
+    )?;
+    let repo = gix::open(&dir)?;
 
     let aws = format!("{}{}", "AKIA", "Z7Q3VXN2LMP4RT6Y");
     let gh = format!("{}{}", "ghp_", "Xk9mP2qR7sT4vW8yZ1bC3dF6gH0jK5nL2pQ4");
