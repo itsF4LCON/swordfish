@@ -244,6 +244,23 @@ impl Style {
 }
 
 const BAR_WIDTH: usize = 40;
+/// Refs/locations listed per finding in the pretty view; JSON always has all.
+const MAX_LISTED: usize = 5;
+
+/// `a, b, c … and 12 more`
+fn summarize(items: &[String], max: usize, st: &Style) -> String {
+    if items.len() <= max {
+        return items.join(", ");
+    }
+    format!(
+        "{} {}",
+        items[..max].join(", "),
+        st.dim(&format!(
+            "… and {} more (see --format json)",
+            items.len() - max
+        ))
+    )
+}
 
 /// Human-readable terminal view of a report.
 pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, color: bool) -> String {
@@ -354,7 +371,7 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
         let refs = if f.refs.is_empty() {
             st.dim("none")
         } else {
-            f.refs.join(", ")
+            summarize(&f.refs, MAX_LISTED, &st)
         };
         let _ = writeln!(out, "  {}  {refs}", label("reachable"));
         let seen: Vec<String> = f
@@ -369,7 +386,12 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
                 )
             })
             .collect();
-        let _ = writeln!(out, "  {}  {}", label("seen at"), seen.join(", "));
+        let _ = writeln!(
+            out,
+            "  {}  {}",
+            label("seen at"),
+            summarize(&seen, MAX_LISTED, &st)
+        );
         out.push('\n');
     }
 
@@ -440,6 +462,17 @@ mod tests {
         assert_eq!(rfc3339(951_782_400), "2000-02-29T00:00:00Z");
         assert_eq!(rfc3339(1_704_189_600), "2024-01-02T10:00:00Z");
         assert_eq!(rfc3339(-1), "1969-12-31T23:59:59Z");
+    }
+
+    #[test]
+    fn long_lists_are_summarized() {
+        let st = Style { on: false };
+        let items: Vec<String> = (0..8).map(|i| format!("r{i}")).collect();
+        assert_eq!(summarize(&items[..3], 5, &st), "r0, r1, r2");
+        assert_eq!(
+            summarize(&items, 5, &st),
+            "r0, r1, r2, r3, r4 … and 3 more (see --format json)"
+        );
     }
 
     #[test]
