@@ -296,6 +296,7 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
 
     if report.findings.is_empty() {
         let _ = writeln!(out, "{}", st.green("No secrets found."));
+        sign_off(&mut out, &st);
         return out;
     }
 
@@ -424,7 +425,13 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
             count(Status::RemovedButInHistory)
         ))
     );
+    sign_off(&mut out, &st);
     out
+}
+
+/// Pretty view only; never part of the JSON output.
+fn sign_off(out: &mut String, st: &Style) {
+    let _ = writeln!(out, "\n{}", st.dim("See you, space cowboy..."));
 }
 
 fn label(name: &str) -> String {

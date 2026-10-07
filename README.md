@@ -81,6 +81,8 @@ scanned 4 commits across 2 refs · 3 unique blobs (3 scanned, 0 binary, 0 too la
   seen at     scripts/deploy.sh:2 (7f345bf9)
 
 2 secrets found: 1 live in HEAD, 0 live on another ref, 1 removed but still in history
+
+See you, space cowboy...
 ```
 
 The `.env` file was deleted three weeks after it was committed, but the

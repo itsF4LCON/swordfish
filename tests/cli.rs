@@ -64,6 +64,7 @@ fn pretty_output_is_redacted_and_uncoloured_when_piped() {
     assert!(stdout.contains("AKIA****"));
     assert!(stdout.contains("REMOVED, BUT STILL IN HISTORY"));
     assert!(stdout.contains(".env:1"));
+    assert!(stdout.trim_end().ends_with("See you, space cowboy..."));
     assert!(!stdout.contains(&aws_key()));
     assert!(!stdout.contains('\x1b'), "no ANSI escapes when not a TTY");
 }
@@ -81,6 +82,13 @@ fn clean_repo_exits_0() {
     let out = swordfish().arg("scan").arg(fx.path()).output().unwrap();
     assert_eq!(out.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&out.stdout).contains("No secrets found."));
+
+    let json = swordfish()
+        .args(["scan", "--format", "json"])
+        .arg(fx.path())
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&json.stdout).contains("space cowboy"));
 }
 
 #[test]
