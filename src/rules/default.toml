@@ -1,0 +1,101 @@
+# Built-in swordfish rules, embedded in the binary.
+#
+# Format: the gitleaks-compatible TOML subset documented in ROADMAP.md §5.
+# Order matters: when two rules match overlapping text in the same blob, the
+# earlier rule wins. Keep specific providers above the generic fallback.
+
+title = "swordfish built-in rules"
+
+# Known documentation/example values that must never be reported.
+[allowlist]
+description = "Published example credentials"
+regexes = [
+  '''^AKIAIOSFODNN7EXAMPLE$''',
+  '''^wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY$''',
+]
+
+[[rules]]
+id = "aws-access-key-id"
+description = "AWS access key ID"
+regex = '''\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\b'''
+entropy = 3.0
+keywords = ["a3t", "akia", "asia", "abia", "acca"]
+
+[[rules]]
+id = "aws-secret-access-key"
+description = "AWS secret access key"
+regex = '''(?i)(?:aws.{0,20}?secret.{0,20}?key|secret_?access_?key)[\w.-]{0,10}['"]?\s{0,5}(?:=|:|=>|:=)\s{0,5}['"]?([A-Za-z0-9/+=]{40})(?:[^A-Za-z0-9/+=]|$)'''
+entropy = 4.0
+keywords = ["secret"]
+
+[[rules]]
+id = "github-token"
+description = "GitHub personal access, OAuth, app or refresh token"
+regex = '''\b((?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z]{36})\b'''
+entropy = 3.0
+keywords = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"]
+
+[[rules]]
+id = "github-fine-grained-pat"
+description = "GitHub fine-grained personal access token"
+regex = '''\b(github_pat_[0-9A-Za-z_]{82})\b'''
+entropy = 3.0
+keywords = ["github_pat_"]
+
+[[rules]]
+id = "slack-token"
+description = "Slack bot, user, app or refresh token"
+regex = '''\b(xox[abposr]-[0-9A-Za-z][0-9A-Za-z-]{8,250})\b'''
+entropy = 3.0
+keywords = ["xoxa-", "xoxb-", "xoxp-", "xoxo-", "xoxr-", "xoxs-"]
+
+[[rules]]
+id = "slack-webhook-url"
+description = "Slack incoming webhook URL"
+regex = '''(https://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9+/]{43,56})'''
+keywords = ["hooks.slack.com"]
+
+[[rules]]
+id = "stripe-secret-key"
+description = "Stripe secret or restricted API key"
+regex = '''\b((?:sk|rk)_(?:test|live|prod)_[0-9A-Za-z]{10,99})\b'''
+entropy = 3.0
+keywords = ["sk_test", "sk_live", "sk_prod", "rk_test", "rk_live", "rk_prod"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API key"
+regex = '''\b(AIza[0-9A-Za-z_\-]{35})(?:[^0-9A-Za-z_\-]|$)'''
+entropy = 3.0
+keywords = ["aiza"]
+
+[[rules]]
+id = "private-key"
+description = "Private key block (RSA, EC, DSA, OpenSSH, PGP, PKCS#8)"
+regex = '''(?s)(-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----.{64,}?-----END[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----)'''
+keywords = ["-----begin"]
+
+[[rules]]
+id = "jwt"
+description = "JSON Web Token"
+regex = '''\b(ey[A-Za-z0-9]{17,}\.ey[A-Za-z0-9/_-]{17,}\.(?:[A-Za-z0-9/_-]{10,}={0,2})?)(?:[^A-Za-z0-9/_=-]|$)'''
+entropy = 3.0
+keywords = ["eyj"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic high-entropy secret assignment"
+regex = '''(?i)[\w.-]{0,40}?(?:access|auth|api|credential|creds|key|passwd|password|secret|token)[\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[\s'"`=]{0,5}([0-9a-z\-_.=+/]{10,150})(?:['"`\s;,]|\\[nr]|$)'''
+entropy = 3.5
+keywords = ["access", "auth", "api", "credential", "creds", "key", "passwd", "password", "secret", "token"]
+
+[rules.allowlist]
+description = "Lock files, variable references and obvious placeholders"
+paths = [
+  '''(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|go\.sum|poetry\.lock|Gemfile\.lock|composer\.lock)$''',
+]
+regexes = [
+  '''^[A-Za-z_.\-]+$''',
+  '''^(?:process\.env|os\.environ|env\.|self\.|this\.|config\.|settings\.)''',
+]
+stopwords = ["example", "sample", "placeholder", "changeme", "xxxxxxxx", "your_", "dummy", "redacted", "<", "${"]
