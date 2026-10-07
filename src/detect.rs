@@ -279,6 +279,24 @@ mod tests {
     }
 
     #[test]
+    fn generic_rule_ignores_identifiers_and_paths() {
+        let d = Detector::new(RuleSet::builtin());
+        for line in [
+            "key = LIBSSH2_KNOWNHOST_KEY_ECDSA_521\n",
+            "key: CARGO_TARGET_X86_64_UNKNOWN_LINUX_musl_LINKER\n",
+            "auth = workspace.lints.rust.rust-2018-idioms.unused\n",
+            "credential = cargo-credential-1password\n",
+            "key_path = /home/username/.ssh/id_rsa\n",
+            "api_doc = docs/BINDINGS.md\n",
+        ] {
+            assert!(hits(&d, line).is_empty(), "false positive on {line:?}");
+        }
+        // A long random segment still counts, even inside a dotted value.
+        let paseto = format!("token = k3.secret.{}\n", "fNYVuMvBgOlljt9TDohnaYLblghqaHoQ");
+        assert_eq!(hits(&d, &paseto).len(), 1);
+    }
+
+    #[test]
     fn binary_blobs_are_skipped() {
         let d = Detector::new(RuleSet::builtin());
         let mut data = b"\x89PNG\r\n\x1a\n\0\0".to_vec();

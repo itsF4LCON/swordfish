@@ -85,7 +85,8 @@ keywords = ["eyj"]
 [[rules]]
 id = "generic-api-key"
 description = "Generic high-entropy secret assignment"
-regex = '''(?i)[\w.-]{0,40}?(?:access|auth|api|credential|creds|key|passwd|password|secret|token)[\w.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[\s'"`=]{0,5}([0-9a-z\-_.=+/]{10,150})(?:['"`\s;,]|\\[nr]|$)'''
+# ASCII-only on purpose: Unicode classes make this hot regex ~100x slower.
+regex = '''(?i-u)(?:access|auth|api|credential|creds|key|passwd|password|secret|token)[a-z0-9_.-]{0,20}[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[\s'"`=]{0,5}([0-9a-z\-_.=+/]{10,150})(?:['"`\s;,]|\\[nr]|$)'''
 entropy = 3.5
 keywords = ["access", "auth", "api", "credential", "creds", "key", "passwd", "password", "secret", "token"]
 
@@ -95,7 +96,14 @@ paths = [
   '''(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|go\.sum|poetry\.lock|Gemfile\.lock|composer\.lock)$''',
 ]
 regexes = [
+  # Plain words and variable references.
   '''^[A-Za-z_.\-]+$''',
   '''^(?:process\.env|os\.environ|env\.|self\.|this\.|config\.|settings\.)''',
+  # Identifiers made of short segments: CONSTANT_NAMES, dotted.config.keys,
+  # kebab-names. A long random segment (a real token) does not match.
+  '''^[A-Za-z][A-Za-z0-9]{0,15}(?:[_.\-][A-Za-z0-9]{1,15})+=?$''',
+  # File paths: absolute system paths, or relative paths ending in an extension.
+  '''^/(?:usr|home|etc|var|opt|tmp|bin|sbin|lib|Users|root)/''',
+  '''^(?:\.{1,2}/)?(?:[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_\-]+\.[A-Za-z]{1,6}$''',
 ]
 stopwords = ["example", "sample", "placeholder", "changeme", "xxxxxxxx", "your_", "dummy", "redacted", "<", "${"]
