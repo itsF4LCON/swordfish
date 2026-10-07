@@ -2,7 +2,7 @@
 name = "swordfish-git"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Hunts secrets in git history and tells the story of each leak: when it appeared, when it was removed, and who can still reach it."
 license = "MIT OR Apache-2.0"
 readme = "README.md"
