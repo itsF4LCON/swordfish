@@ -255,8 +255,9 @@ stopwords = ["dummy"]            # secret containing any → ignored (case-insen
 paths = ['''(^|/)vendor/''']
 ```
 
-Ignored gitleaks keys (accepted, with a warning): `tags`, `commits`,
-`condition`, `[extend]`. A rule without a `regex` (gitleaks path-only rules) is
+Other gitleaks keys: `tags` and unknown keys are ignored silently.
+`commits`, a `condition` other than OR, and `[extend]` are ignored with a
+warning. A rule without a `regex` (gitleaks path-only rules) is
 skipped with a warning.
 
 ---

@@ -23,8 +23,8 @@ The results table is written next to the clone as `<name>-results.md`.
   scanned for every commit that introduces it. swordfish scans each unique
   blob once, then derives timelines from tree diffs. The gap grows with
   history length and with the number of branches that share history.
-- **Different rule sets.** gitleaks ships about 150 provider rules, while
-  swordfish v0.1 has 11. For a like-for-like comparison of the engines, pass
+- **Different rule sets.** gitleaks ships far more provider rules than
+  swordfish v0.1 (11). For a like-for-like comparison of the engines, pass
   the same rules to both: swordfish accepts gitleaks-style TOML through
   `--rules`.
 - **Threads.** swordfish uses every core through rayon. Set
