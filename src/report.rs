@@ -89,6 +89,7 @@ pub struct LocationJson {
 pub fn status_str(status: Status) -> &'static str {
     match status {
         Status::LiveInHead => "live_in_head",
+        Status::LiveOnOtherRef => "live_on_other_ref",
         Status::RemovedButInHistory => "removed_but_in_history",
     }
 }
@@ -300,7 +301,9 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
 
     let total = report.findings.len();
     for (i, f) in report.findings.iter().enumerate() {
-        let live = f.status == status_str(Status::LiveInHead);
+        let in_head = f.status == status_str(Status::LiveInHead);
+        let other_ref = f.status == status_str(Status::LiveOnOtherRef);
+        let live = in_head || other_ref;
         let marker = if live {
             st.red("●")
         } else {
@@ -314,8 +317,10 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
             st.cyan(&f.secret),
             st.dim(&format!("fp {}", &f.fingerprint[..12]))
         );
-        let status = if live {
+        let status = if in_head {
             st.red("LIVE IN HEAD")
+        } else if other_ref {
+            st.red("LIVE ON ANOTHER REF (not in HEAD)")
         } else {
             st.yellow("REMOVED, BUT STILL IN HISTORY (rotate this key)")
         };
@@ -357,14 +362,14 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
             "  {}  {:.2} days{}",
             label("exposed"),
             f.exposure_days,
-            if f.removed.is_none() {
+            if live || f.removed.is_none() {
                 " and counting"
             } else {
                 ""
             }
         );
         if let Some(start) = history_start {
-            let bar = exposure_bar(start, now, f);
+            let bar = exposure_bar(start, now, f, live);
             let painted = if live { st.red(&bar) } else { st.yellow(&bar) };
             let _ = writeln!(out, "  {}  {painted}", label("timeline"));
         }
@@ -395,20 +400,29 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
         out.push('\n');
     }
 
-    let live = report
-        .findings
-        .iter()
-        .filter(|f| f.status == status_str(Status::LiveInHead))
-        .count();
+    let count = |status: Status| {
+        report
+            .findings
+            .iter()
+            .filter(|f| f.status == status_str(status))
+            .count()
+    };
     let _ = writeln!(
         out,
-        "{} {}, {}",
+        "{} {}, {}, {}",
         st.bold(&format!(
             "{total} secret{} found:",
             if total == 1 { "" } else { "s" }
         )),
-        st.red(&format!("{live} live in HEAD")),
-        st.yellow(&format!("{} removed but still in history", total - live))
+        st.red(&format!("{} live in HEAD", count(Status::LiveInHead))),
+        st.red(&format!(
+            "{} live on another ref",
+            count(Status::LiveOnOtherRef)
+        )),
+        st.yellow(&format!(
+            "{} removed but still in history",
+            count(Status::RemovedButInHistory)
+        ))
     );
     out
 }
@@ -423,17 +437,17 @@ fn human_date(rfc: &str) -> String {
 }
 
 /// `░░░░████████░░░░` over [first commit, now]; filled = exposure window.
-fn exposure_bar(history_start: i64, now: i64, f: &FindingJson) -> String {
+fn exposure_bar(history_start: i64, now: i64, f: &FindingJson, live: bool) -> String {
     let span = (now - history_start).max(1) as f64;
     let pos = |t: i64| -> usize {
         let frac = ((t - history_start) as f64 / span).clamp(0.0, 1.0);
         (frac * (BAR_WIDTH as f64 - 1.0)).round() as usize
     };
     let start = pos(parse_rfc3339(&f.introduced.date));
-    let end = f
-        .removed
-        .as_ref()
-        .map_or(BAR_WIDTH - 1, |r| pos(parse_rfc3339(&r.date)));
+    let end = match (&f.removed, live) {
+        (Some(r), false) => pos(parse_rfc3339(&r.date)),
+        _ => BAR_WIDTH - 1,
+    };
     (0..BAR_WIDTH)
         .map(|i| if i >= start && i <= end { '█' } else { '░' })
         .collect()

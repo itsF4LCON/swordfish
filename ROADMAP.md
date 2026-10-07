@@ -142,23 +142,34 @@ For each secret `s`:
 * **introduced**: the earliest add event. Its `path` and `line` are the
   location of `s` in that commit.
 * **live_in_head**: `s` is present in the tree of the commit `HEAD` resolves to.
+* **live on another branch**: `s` is not in HEAD, but is present in the tree at
+  the tip of some `refs/heads/*` or `refs/remotes/*` ref. Tags don't count,
+  because they are fixed snapshots of history.
 * **removed**:
   * `null` if `live_in_head`.
   * Otherwise, the earliest remove event in a descendant of the introducing
     commit. Remove events that are ancestors of `HEAD` are preferred, which is
     what "the same line of history" means.
-  * `null` if there is no such event, for example when the secret still lives at
-    the tip of a branch other than `HEAD`.
+  * `null` if there is no such event, for example when the secret was only ever
+    on a branch other than `HEAD`.
+  * For `live_on_other_ref`, `removed` can be set: it is the removal on HEAD's
+    line while another branch still holds the secret.
   * `removed.path` is where the parent still had it.
   * Removal means "gone from the whole tree". Renaming a file that holds a secret
     is not a removal.
-* **exposure_days**: `(removed.date or now) − introduced.date`, in days,
-  rounded to 2 decimals and never negative.
+* **exposure_days**: `end − introduced.date`, in days, rounded to 2 decimals
+  and never negative. `end` is `removed.date` for `removed_but_in_history`
+  with a removal. Otherwise it is now, because the secret is still live on
+  some branch or was never removed.
 * **refs**: every ref, plus `HEAD` when detached, that can reach *any* commit
   containing `s`. Every containing commit has an add-event ancestor, so this
   equals the refs whose tip is a descendant of any add-event commit. It's
   computed with a breadth-first search over child edges.
-* **status** (v0.1): `live_in_head` or `removed_but_in_history`.
+* **status** (v0.1), first match wins:
+  * `live_in_head`
+  * `live_on_other_ref`: live at another branch tip (see above)
+  * `removed_but_in_history`: at no branch tip, but reachable from a ref
+    (for example a tag, or old commits)
   * v0.2 adds `unreachable_only`.
 
 Refs scanned in v0.1 are every ref under `refs/` (branches, tags, remotes,
@@ -198,7 +209,7 @@ removing a field, or changing its meaning, bumps `schema_version`.
       "description": "AWS access key ID",
       "secret": "AKIA****",              // full value only with --show-secrets
       "redacted": true,
-      "status": "removed_but_in_history", // live_in_head | removed_but_in_history
+      "status": "removed_but_in_history", // live_in_head | live_on_other_ref | removed_but_in_history
       "introduced": {
         "commit": "<40-hex>",
         "author": { "name": "Alice", "email": "alice@example.com" },
@@ -292,6 +303,8 @@ Acceptance criteria:
   `introduced`/`removed` commits, dates, path and line exactly, plus
   `exposure_days == 30.0` and `status == removed_but_in_history`.
 - A secret still in HEAD reports `removed == null` and `status == live_in_head`.
+- A secret removed on HEAD's line but kept on another branch reports
+  `status == live_on_other_ref`, and its exposure keeps counting.
 - A secret that only exists on a deleted, unmerged branch is **not** reported
   (documented gap, closed by v0.2).
 - A secret merged in from a branch is `introduced` at the branch commit, not
@@ -314,6 +327,7 @@ Tasks:
 - Optionally scan stash entries explicitly, beyond `refs/stash`.
 - Status classification:
   - `live_in_head`
+  - `live_on_other_ref`
   - `removed_but_in_history` (reachable from a ref)
   - `unreachable_only`: only reachable from the reflog or dangling objects,
     so it disappears on `git gc --prune` but still sits in local clones and

@@ -44,7 +44,12 @@ pub struct SecretDef {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
+    /// Present in the tree HEAD resolves to.
     LiveInHead,
+    /// Not in HEAD, but still present at the tip of another local or remote
+    /// branch. Tags are snapshots of history and do not count.
+    LiveOnOtherRef,
+    /// Not present at any ref tip, but reachable in history.
     RemovedButInHistory,
 }
 
@@ -273,8 +278,15 @@ pub fn build(
                 .filter(|t| reach[t.commit as usize])
                 .map(|t| t.name.clone())
                 .collect();
+            let has = |c: u32| present[c as usize].binary_search(&(s as u32)).is_ok();
             let status = if live {
                 Status::LiveInHead
+            } else if graph
+                .tips
+                .iter()
+                .any(|t| is_branch(&t.name) && has(t.commit))
+            {
+                Status::LiveOnOtherRef
             } else {
                 Status::RemovedButInHistory
             };
@@ -337,7 +349,11 @@ pub fn build(
             event(graph, interned, c, path, None)
         });
 
-        let end = removed.as_ref().map_or(now, |r| r.time);
+        // Still exposed while any ref tip holds it, even if HEAD's line removed it.
+        let end = match (status, &removed) {
+            (Status::RemovedButInHistory, Some(r)) => r.time,
+            _ => now,
+        };
         let exposure_days =
             ((end - introduced.time).max(0) as f64 / 86_400.0 * 100.0).round() / 100.0;
 
@@ -363,6 +379,11 @@ pub fn build(
         });
     }
     findings
+}
+
+/// Local and remote-tracking branches: refs that move, unlike tags.
+fn is_branch(name: &str) -> bool {
+    name.starts_with("refs/heads/") || name.starts_with("refs/remotes/")
 }
 
 fn event(graph: &Graph, interned: &Interned, commit: u32, path: u32, line: Option<u32>) -> Event {

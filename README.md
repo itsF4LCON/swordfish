@@ -13,7 +13,8 @@ swordfish tells you **the story of each leak**:
 - **when it was "removed":** the commit that deleted it from the tree
 - **how long it was exposed:** in days
 - **who can still reach it:** the branches and tags that contain it today
-- **its status:** `live_in_head` or `removed_but_in_history` ("rotate this key")
+- **its status:** `live_in_head`, `live_on_other_ref` (gone from HEAD but
+  still on another branch), or `removed_but_in_history` ("rotate this key")
 
 swordfish is **read-only** (it never writes to the repo it scans) and makes
 **no network calls**.
@@ -79,7 +80,7 @@ scanned 4 commits across 2 refs · 3 unique blobs (3 scanned, 0 binary, 0 too la
   reachable   refs/heads/main
   seen at     scripts/deploy.sh:2 (7f345bf9)
 
-2 secrets found: 1 live in HEAD, 1 removed but still in history
+2 secrets found: 1 live in HEAD, 0 live on another ref, 1 removed but still in history
 ```
 
 The `.env` file was deleted three weeks after it was committed, but the

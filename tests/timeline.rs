@@ -230,10 +230,42 @@ fn secret_only_on_unmerged_branch_tip() {
 
     let report = fx.json(NOW);
     let f = finding(&report, "github-token");
-    assert_eq!(f["status"], "removed_but_in_history");
+    assert_eq!(f["status"], "live_on_other_ref");
     assert_eq!(f["removed"], serde_json::Value::Null);
     assert_eq!(f["exposure_days"], 93.0);
     assert_eq!(f["refs"], json!(["refs/heads/wip"]));
+}
+
+#[test]
+fn removed_from_head_but_kept_on_a_branch_is_live_on_other_ref() {
+    let fx = Fixture::new();
+    let env = format!("AWS_ACCESS_KEY_ID={}\n", aws_key());
+    let readme: (&str, &[u8]) = ("README.md", b"hi\n");
+    let c1 = fx.commit(
+        "HEAD",
+        &[],
+        &[readme, (".env", env.as_bytes())],
+        T0,
+        "Alice",
+    );
+    // The release branch forks while the key is present and keeps it.
+    fx.commit(
+        "refs/heads/release",
+        &[c1],
+        &[readme, (".env", env.as_bytes()), ("CHANGELOG", b"1.0\n")],
+        T0 + DAY,
+        "Alice",
+    );
+    let c2 = fx.commit("HEAD", &[c1], &[readme], T0 + 4 * DAY, "Bob");
+
+    let report = fx.json(NOW);
+    let f = finding(&report, "aws-access-key-id");
+    assert_eq!(f["status"], "live_on_other_ref");
+    // Removal on HEAD's line is still reported...
+    assert_eq!(f["removed"]["commit"], c2.to_string());
+    // ...but exposure keeps counting while a ref tip still holds the key.
+    assert_eq!(f["exposure_days"], 100.0);
+    assert_eq!(f["refs"], json!(["refs/heads/main", "refs/heads/release"]));
 }
 
 #[test]
