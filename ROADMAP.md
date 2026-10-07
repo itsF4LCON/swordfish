@@ -177,7 +177,7 @@ removing a field, or changing its meaning, bumps `schema_version`.
   "schema_version": 1,
   "tool": { "name": "swordfish", "version": "0.1.0" },
   "repository": "/abs/path/to/repo",          // git dir's worktree (or git dir if bare)
-  "head": "refs/heads/main",                   // symbolic HEAD target, "HEAD" if detached, null if unborn
+  "head": "refs/heads/main",                   // symbolic HEAD target (even if unborn), "HEAD" if detached
   "generated_at": "2026-10-07T20:00:00Z",
   "stats": {
     "refs": 3,                 // distinct ref names scanned (excluding HEAD)
