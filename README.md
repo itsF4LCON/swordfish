@@ -163,10 +163,10 @@ runs a hyperfine comparison against gitleaks; see [bench/README.md](bench/README
 On a labeled synthetic corpus (fake secrets planted across branches, tags,
 deleted files and merge commits, plus decoys), swordfish and gitleaks 8.30.1
 have about the same recall for the secret types swordfish has rules for
-(91.7–94.4% vs 91.1–94.4% across six seeds, leaving out merge commits). swordfish also finds secrets that
-exist only in a merge commit, which gitleaks misses because it reads
-`git log -p`. gitleaks is slightly more precise (about 92.7% vs 91%) and covers
-far more providers. Methodology and full tables are in
+(92.6–94.9% vs 92.0–94.9% across six seeds). gitleaks needs
+`--log-opts="--all -m"` to see secrets that exist only in a merge commit;
+swordfish finds them without a flag. gitleaks is more precise (about 93% vs
+91%) and covers far more providers. Methodology and full tables are in
 [bench/accuracy/](bench/accuracy/README.md).
 
 ## Roadmap

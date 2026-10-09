@@ -7,6 +7,7 @@
 # Usage:
 #   bench/accuracy/run.sh                  # seed 20261009, writes bench/accuracy/RESULTS.md
 #   SEED=7 OUT=/tmp/r.md bench/accuracy/run.sh
+#   GITLEAKS_LOG_OPTS="--all -m" OUT=bench/accuracy/RESULTS-gitleaks-m.md bench/accuracy/run.sh
 #
 # The corpus (fake secrets) is generated under target/accuracy/ and is never
 # committed. Nothing here touches the network.
@@ -17,6 +18,8 @@ WORK="${WORK:-$(pwd)/target/accuracy/seed-$SEED}"
 OUT="${OUT:-$(pwd)/bench/accuracy/RESULTS.md}"
 SWORDFISH="${SWORDFISH:-$(pwd)/target/release/swordfish}"
 GITLEAKS="${GITLEAKS:-gitleaks}"
+# gitleaks' default. Add -m to make git print diffs for merge commits.
+GITLEAKS_LOG_OPTS="${GITLEAKS_LOG_OPTS:---all}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 command -v "$GITLEAKS" >/dev/null || { echo "missing required tool: gitleaks" >&2; exit 2; }
@@ -27,12 +30,14 @@ python3 -I "$HERE/gen_corpus.py" "$WORK" --seed "$SEED"
 
 # Both tools see every ref. Exit code 1 means "findings", not failure.
 "$SWORDFISH" scan "$WORK/repo" --format json --show-secrets > "$WORK/swordfish.json" 2>/dev/null || [ $? -eq 1 ]
-"$GITLEAKS" git --no-banner --log-level error --log-opts=--all --exit-code 0 \
+"$GITLEAKS" git --no-banner --log-level error --log-opts="$GITLEAKS_LOG_OPTS" --exit-code 0 \
   --report-format json --report-path "$WORK/gitleaks.json" "$WORK/repo"
 
 python3 -I "$HERE/score.py" "$WORK/labels.json" "$WORK/swordfish.json" "$WORK/gitleaks.json" \
   --meta "seed=$SEED" \
   --meta "corpus HEAD=$(git -C "$WORK/repo" rev-parse HEAD)" \
   --meta "swordfish=$("$SWORDFISH" --version) @ $(git rev-parse --short HEAD)" \
-  --meta "gitleaks=$("$GITLEAKS" version)" > "$OUT"
+  --meta "gitleaks=$("$GITLEAKS" version) git --log-opts=\"$GITLEAKS_LOG_OPTS\"" \
+  --meta "python=$(python3 --version)" \
+  --meta "git=$(git --version)" > "$OUT"
 echo "results written to $OUT"

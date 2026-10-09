@@ -4,6 +4,7 @@
 cargo build --release
 bench/accuracy/run.sh                 # seed 20261009 → bench/accuracy/RESULTS.md
 SEED=7 OUT=/tmp/seed7.md bench/accuracy/run.sh
+GITLEAKS_LOG_OPTS="--all -m" OUT=bench/accuracy/RESULTS-gitleaks-m.md bench/accuracy/run.sh
 ```
 
 You need python3 (standard library only), git and
@@ -12,48 +13,54 @@ builds a labeled repository under `target/accuracy/`, scans it with both tools
 on every ref, and scores the findings against the labels. A run takes a few
 seconds and makes no network calls.
 
-Full tables for the default seed are in [RESULTS.md](RESULTS.md).
+Full tables for the default seed are in [RESULTS.md](RESULTS.md) (gitleaks
+defaults) and [RESULTS-gitleaks-m.md](RESULTS-gitleaks-m.md) (gitleaks with
+merge diffs).
 
 ## Summary
 
-Measured with swordfish 0.1.0 and gitleaks 8.30.1 (default config) on six
-seeds. Each cell is swordfish / gitleaks.
+Measured with swordfish 0.1.0 and gitleaks 8.30.1 (default rules) on six
+seeds. Each cell is swordfish / gitleaks. gitleaks runs twice: with its
+default `--log-opts=--all`, and with `--log-opts="--all -m"` so that git also
+prints diffs for merge commits.
 
-| seed | in-scope recall | ... excluding merge-only secrets | other-provider recall | precision |
-|---|---|---|---|---|
-| 20261009 | 92.6% / 84.7% | 92.0% / 91.4% | 70.0% / 100.0% | 91.2% / 92.7% |
-| 1 | 94.3% / 86.9% | 94.4% / 94.4% | 60.0% / 100.0% | 90.3% / 92.8% |
-| 2 | 92.6% / 81.2% | 91.7% / 91.1% | 72.0% / 100.0% | 90.9% / 92.5% |
-| 3 | 93.8% / 85.8% | 93.8% / 93.2% | 64.0% / 100.0% | 91.6% / 93.2% |
-| 4 | 93.2% / 84.1% | 92.5% / 92.5% | 64.0% / 100.0% | 91.2% / 92.6% |
-| 5 | 94.9% / 83.5% | 94.2% / 94.2% | 68.0% / 98.0% | 91.0% / 92.6% |
+| seed | in-scope recall, gitleaks default | in-scope recall, gitleaks `-m` | other-provider recall | precision, gitleaks `-m` | F1, gitleaks `-m` |
+|---|---|---|---|---|---|
+| 20261009 | 92.6% / 84.7% | 92.6% / 92.0% | 70.0% / 100.0% | 91.2% / 93.1% | 0.919 / 0.926 |
+| 1 | 94.3% / 86.9% | 94.3% / 93.8% | 60.0% / 100.0% | 90.3% / 93.2% | 0.923 / 0.935 |
+| 2 | 92.6% / 81.2% | 92.6% / 92.0% | 72.0% / 100.0% | 90.9% / 93.1% | 0.917 / 0.926 |
+| 3 | 93.8% / 85.8% | 93.8% / 93.2% | 64.0% / 100.0% | 91.6% / 93.5% | 0.927 / 0.934 |
+| 4 | 93.2% / 84.1% | 93.2% / 93.2% | 64.0% / 100.0% | 91.2% / 93.1% | 0.922 / 0.932 |
+| 5 | 94.9% / 83.5% | 94.9% / 94.9% | 68.0% / 98.0% | 91.0% / 93.2% | 0.929 / 0.940 |
+
+With default options gitleaks' precision is 92.5–93.2% (RESULTS.md).
 
 What the numbers say:
 
-- **For secret types swordfish has a rule for, recall is about the same**,
-  within one point of gitleaks, once merge commits are left out. Deleted
+- **For secret types swordfish has a rule for, recall is about the same.**
+  swordfish leads by 0–0.6 points once gitleaks sees merge diffs. Deleted
   files, unmerged branches, tag-only commits and duplicates are found equally
   by both.
-- **Secrets that exist only in a merge commit**: swordfish finds 94 of 96
-  across the six seeds, and gitleaks finds none. swordfish's two misses are
-  generic passwords it would miss anywhere. gitleaks reads `git log -p`, and
-  git prints no diff for merge commits by default, so content introduced
-  while resolving a merge (an "evil merge") is never scanned. swordfish diffs
-  every commit's tree against its first parent, merges included. This
-  scenario is 7–11% of the in-scope corpus, which is a choice of the corpus,
-  not a measured real-world rate. It accounts for most of the gap in the
-  first column.
+- **Secrets that exist only in a merge commit** (an "evil merge": content
+  added while resolving a merge, in neither parent) need a flag on gitleaks.
+  gitleaks reads `git log -p`, and git prints no diff for merge commits by
+  default, so with its default options it found 0 of 96 across the six seeds.
+  With `--log-opts="--all -m"` it found 93 of 96. swordfish found 94 of 96
+  with no flag, because it diffs every commit's tree against its first
+  parent, merges included. This scenario is 7–11% of the in-scope corpus,
+  which is a choice of the corpus, not a measured real-world rate, and it
+  accounts for the whole gap in the "gitleaks default" column.
 - **gitleaks covers far more providers.** For the ten providers swordfish
   has no rule for, swordfish only catches a token when it sits in a
   `KEY=value` style assignment that the generic rule recognises (60–72%).
   It caught none of 30 OpenAI project keys. gitleaks catches 98–100%.
-- **gitleaks is slightly more precise** (about 92.7% vs 91%). Both flag
-  content hashes, pinned commit SHAs and Stripe publishable keys sitting in
-  `key:`-style assignments, plus the jwt.io example token. swordfish also
-  flags base64 public keys in `"publicKey": ...` fields (4 of 8 public-key
-  decoys). gitleaks flags all 4 UUID idempotency keys, swordfish 2–4. Every
-  swordfish false positive in these runs comes from its generic rule, plus
-  the jwt.io example token.
+- **gitleaks is more precise** (about 93% vs 91%), and with `-m` it has the
+  higher F1 on every seed. Both flag content hashes, pinned commit SHAs and
+  Stripe publishable keys sitting in `key:`-style assignments, plus the
+  jwt.io example token. swordfish also flags base64 public keys in
+  `"publicKey": ...` fields (4 of 8 public-key decoys). gitleaks flags all 4
+  UUID idempotency keys, swordfish 2–4. Every swordfish false positive in
+  these runs comes from its generic rule, plus the jwt.io example token.
 - **Both tools miss**, pooled over six seeds: most passwords containing
   symbols such as `&`, `@` or `*` (swordfish 9 of 39, gitleaks 8 of 39);
   every generic password or AWS secret key in .NET-style
@@ -67,8 +74,9 @@ What the numbers say:
 ## How the corpus is built
 
 `gen_corpus.py` writes a git repository and a `labels.json` ground truth from
-a seeded RNG with fixed dates and identities, so a seed always produces the
-same commit IDs (the corpus HEAD is recorded in RESULTS.md). The fake secrets
+a seeded RNG with fixed dates and identities. With the same Python and git
+versions, a seed always produces the same commit IDs (RESULTS.md records the
+corpus HEAD and both versions). The fake secrets
 are generated at run time and never committed, so this repository does not
 trip secret scanning on itself.
 
@@ -123,8 +131,9 @@ unlabeled false positive.
 - gitleaks rule IDs are mapped to swordfish's families for the per-family
   precision table (`score.py`, `GITLEAKS_FAMILY`). gitleaks rules for other
   providers fall into `other-provider`.
-- Both tools run with their defaults on every ref: swordfish `scan --format
-  json --show-secrets`; gitleaks `git --log-opts=--all`. No custom rules or
+- Both tools run with their default rules on every ref: swordfish `scan
+  --format json --show-secrets`; gitleaks `git --log-opts=--all`, and a
+  second time with `--log-opts="--all -m"`. No custom rules or
   allowlists are passed, and neither tool's rules were changed for this
   benchmark.
 
