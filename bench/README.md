@@ -1,5 +1,8 @@
 # Benchmark: swordfish vs gitleaks
 
+This page covers speed. For detection accuracy against a labeled corpus, see
+[accuracy/](accuracy/README.md).
+
 ```sh
 cargo build --release
 bench/compare.sh                                         # rails/rails by default

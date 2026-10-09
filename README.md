@@ -158,6 +158,17 @@ On `rust-lang/cargo` (35k commits, 9.7k refs, 71k unique blobs) a full scan
 takes about 1 s on 20 cores and about 5 s on 2 threads. `bench/compare.sh`
 runs a hyperfine comparison against gitleaks; see [bench/README.md](bench/README.md).
 
+## Accuracy
+
+On a labeled synthetic corpus (fake secrets planted across branches, tags,
+deleted files and merge commits, plus decoys), swordfish and gitleaks 8.30.1
+have about the same recall for the secret types swordfish has rules for
+(91.7–94.4% vs 91.1–94.4% across six seeds, leaving out merge commits). swordfish also finds secrets that
+exist only in a merge commit, which gitleaks misses because it reads
+`git log -p`. gitleaks is slightly more precise (about 92.7% vs 91%) and covers
+far more providers. Methodology and full tables are in
+[bench/accuracy/](bench/accuracy/README.md).
+
 ## Roadmap
 
 v0.1 (this release) walks every commit reachable from any ref. Next:
