@@ -1,5 +1,8 @@
 # Benchmark: swordfish vs gitleaks
 
+This page covers speed. For detection accuracy against a labeled corpus, see
+[accuracy/](accuracy/README.md).
+
 ```sh
 cargo build --release
 bench/compare.sh                                         # rails/rails by default
@@ -29,6 +32,10 @@ The results table is written next to the clone as `<name>-results.md`.
   `--rules`.
 - **Threads.** swordfish uses every core through rayon. Set
   `RAYON_NUM_THREADS=1` for a single-threaded comparison.
+- **Merge commits.** `--log-opts=--all` does not make gitleaks scan merge
+  diffs, so the default comparison skips content that appears only in a
+  merge. `--log-opts="--all -m"` matches swordfish's coverage, at some extra
+  cost. See [accuracy/](accuracy/README.md).
 - **Exit codes.** Both tools exit 1 when they find something, so the script
   passes `--ignore-failure` to hyperfine.
 
