@@ -1,11 +1,3 @@
-//! Two-stage secret detection over a single blob.
-//!
-//! Stage 1 runs one case-insensitive Aho-Corasick automaton built from every
-//! rule keyword. Stage 2 runs the regex only for rules whose keywords hit (and
-//! for keyword-less rules). Entropy and content allowlists are evaluated only
-//! on regex candidates. Path-dependent filters are applied later by the
-//! timeline, because a deduplicated blob has no single path.
-
 use std::ops::Range;
 
 use aho_corasick::AhoCorasick;
@@ -13,16 +5,12 @@ use aho_corasick::AhoCorasick;
 use crate::entropy::shannon;
 use crate::rules::RuleSet;
 
-/// Bytes inspected for a NUL when deciding whether a blob is binary.
 pub const BINARY_SNIFF_LEN: usize = 8000;
 
-/// One secret found in a blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawHit {
-    /// Index into [`RuleSet::rules`].
     pub rule: usize,
     pub secret: Vec<u8>,
-    /// 1-based line of the first byte of the secret.
     pub line: u32,
 }
 
@@ -35,9 +23,7 @@ pub enum BlobScan {
 pub struct Detector {
     rules: RuleSet,
     automaton: Option<AhoCorasick>,
-    /// Automaton pattern index -> rules using that keyword.
     keyword_rules: Vec<Vec<usize>>,
-    /// Rules without keywords; their regex always runs.
     unconditional: Vec<usize>,
 }
 
@@ -163,7 +149,6 @@ fn line_number(data: &[u8], offset: usize) -> u32 {
     u32::try_from(newlines + 1).unwrap_or(u32::MAX)
 }
 
-/// The full line(s) spanned by `start..end`, without the trailing newline.
 fn line_around(data: &[u8], start: usize, end: usize) -> &[u8] {
     let line_start = data[..start]
         .iter()
@@ -180,8 +165,6 @@ fn line_around(data: &[u8], start: usize, end: usize) -> &[u8] {
 mod tests {
     use super::*;
 
-    // Test tokens are assembled at runtime so this source file does not itself
-    // trip secret scanners (including swordfish run on its own repo).
     fn aws_key() -> String {
         format!("{}{}", "AKIA", "Z7Q3VXN2LMP4RT6Y")
     }
@@ -291,7 +274,6 @@ mod tests {
         ] {
             assert!(hits(&d, line).is_empty(), "false positive on {line:?}");
         }
-        // A long random segment still counts, even inside a dotted value.
         let paseto = format!("token = k3.secret.{}\n", "fNYVuMvBgOlljt9TDohnaYLblghqaHoQ");
         assert_eq!(hits(&d, &paseto).len(), 1);
     }

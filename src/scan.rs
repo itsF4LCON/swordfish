@@ -1,5 +1,3 @@
-//! The scan pipeline: walk → diff → dedupe → detect (parallel) → timeline.
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,20 +13,15 @@ use crate::history::{self, Graph, TreeDiffer};
 use crate::rules::RuleSet;
 use crate::timeline::{self, Finding, Hit, Interned, SecretDef};
 
-/// Default `--max-blob-size`: 1 MiB.
 pub const DEFAULT_MAX_BLOB_SIZE: u64 = 1024 * 1024;
 
-/// Commits diffed per parallel batch before interning (bounds peak memory).
 const DIFF_BATCH: usize = 2048;
-/// Per-thread object cache; trees are re-read across neighbouring commits.
 const OBJECT_CACHE_BYTES: usize = 32 * 1024 * 1024;
 
 pub struct ScanOptions {
     pub path: PathBuf,
     pub rules: RuleSet,
     pub max_blob_size: u64,
-    /// "Now" for exposure of secrets that were never removed (Unix seconds).
-    /// Injected so results are reproducible in tests.
     pub now: i64,
 }
 
@@ -48,7 +41,6 @@ pub struct Stats {
 pub struct ScanResult {
     pub repository: PathBuf,
     pub head: Option<String>,
-    /// Earliest committer time in the scanned history.
     pub history_start: Option<i64>,
     pub stats: Stats,
     pub findings: Vec<Finding>,
@@ -85,7 +77,6 @@ pub fn scan(opts: ScanOptions) -> Result<ScanResult> {
 
     let interned = diff_all(&shared, &graph, &missing)?;
 
-    // Blobs only ever seen at globally allowlisted paths are never read.
     let path_ok: Vec<bool> = interned
         .paths
         .iter()
@@ -145,7 +136,6 @@ pub fn scan(opts: ScanOptions) -> Result<ScanResult> {
                     });
                     let def = &mut secrets[id as usize];
                     def.rule = def.rule.min(h.rule);
-                    // One hit per secret per blob: the first line it appears on.
                     match hits.iter_mut().find(|x: &&mut Hit| x.secret == id) {
                         Some(existing) => existing.line = existing.line.min(h.line),
                         None => hits.push(Hit {
@@ -183,7 +173,6 @@ pub fn scan(opts: ScanOptions) -> Result<ScanResult> {
     })
 }
 
-/// Open read-only and isolated: no global/system config, no hooks, no env overrides.
 fn open_repo(path: &Path) -> Result<gix::Repository> {
     gix::discover_opts(path, Default::default(), gix::open::Options::isolated())
         .with_context(|| format!("{} is not inside a git repository", path.display()))

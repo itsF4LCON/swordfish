@@ -1,19 +1,9 @@
-//! Builds a small demo repository with a realistic leak story:
-//!
-//! ```text
-//! cargo run --example demo -- /tmp/swordfish-demo
-//! swordfish scan /tmp/swordfish-demo
-//! ```
-//!
-//! All secrets are fake and assembled at runtime.
-
 use anyhow::{bail, Result};
 use gix::objs::tree::EntryKind;
 use gix::refs::transaction::PreviousValue;
 use gix::ObjectId;
 
 const DAY: i64 = 86_400;
-/// 2025-03-03T09:00:00Z
 const T0: i64 = 1_740_992_400;
 
 fn main() -> Result<()> {
@@ -24,7 +14,6 @@ fn main() -> Result<()> {
         bail!("{dir} already contains a repository");
     }
     gix::init(&dir)?;
-    // Pin the branch name regardless of the system's init.defaultBranch.
     std::fs::write(
         std::path::Path::new(&dir).join(".git/HEAD"),
         "ref: refs/heads/main\n",
@@ -57,7 +46,6 @@ fn main() -> Result<()> {
         T0 + 9 * DAY,
         "Bob",
     )?;
-    // "Oops" - remove .env, but the tag and history still hold it.
     commit(
         &repo,
         &[c3],

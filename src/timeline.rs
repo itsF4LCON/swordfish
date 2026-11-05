@@ -1,11 +1,3 @@
-//! Turns per-blob hits into per-secret exposure timelines.
-//!
-//! See ROADMAP.md §3 for the exact definitions implemented here. The core idea:
-//! walk commits in topological order and carry, per commit, the small set of
-//! secret-bearing `(path, blob)` entries in its tree. That set is derived from
-//! the first parent plus the first-parent diff and is `Arc`-shared when
-//! unchanged, so clean history costs nothing.
-
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 
@@ -16,7 +8,6 @@ use rayon::prelude::*;
 use crate::history::Graph;
 use crate::rules::RuleSet;
 
-/// A secret hit inside one unique blob.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Hit {
     pub secret: u32,
@@ -24,32 +15,23 @@ pub struct Hit {
     pub line: u32,
 }
 
-/// Interned history: every path and blob gets a dense id.
 #[derive(Debug, Default)]
 pub struct Interned {
     pub paths: Vec<BString>,
     pub blobs: Vec<ObjectId>,
-    /// Per commit (indexed like `Graph::commits`): first-parent changes,
-    /// sorted by path id. `None` blob = path removed.
     pub changes: Vec<Vec<(u32, Option<u32>)>>,
 }
 
-/// A distinct secret value.
 #[derive(Debug, Clone)]
 pub struct SecretDef {
     pub value: Vec<u8>,
-    /// Lowest (most specific) rule index that matched it.
     pub rule: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
-    /// Present in the tree HEAD resolves to.
     LiveInHead,
-    /// Not in HEAD, but still present at the tip of another local or remote
-    /// branch. Tags are snapshots of history and do not count.
     LiveOnOtherRef,
-    /// Not present at any ref tip, but reachable in history.
     RemovedButInHistory,
 }
 
@@ -82,11 +64,9 @@ pub struct Finding {
     pub locations: Vec<Location>,
 }
 
-/// Commit-level timeline of one secret, before resolving ids to names.
 struct Timeline {
     secret: usize,
     intro: u32,
-    /// (removing commit, parent that still held the secret)
     removed: Option<(u32, u32)>,
     refs: Vec<String>,
     status: Status,
@@ -103,7 +83,6 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    /// Whether a hit of `rule` may be reported at `path`.
     fn allowed(&mut self, path: u32, rule: usize) -> bool {
         let rules = self.rules;
         let paths = &self.interned.paths;
@@ -113,7 +92,6 @@ impl Ctx<'_> {
         })
     }
 
-    /// Hits of `blob` that count at `path`.
     fn hits_at(&mut self, path: u32, blob: u32) -> Vec<Hit> {
         let hits = &self.blob_hits[blob as usize];
         let mut out = Vec::with_capacity(hits.len());
@@ -145,7 +123,6 @@ pub fn build(
         allowed: HashMap::new(),
     };
 
-    // 1. Propagate secret-bearing entries and present secrets along topo order.
     let empty_entries: Entries = Arc::new(Vec::new());
     let empty_secrets: Secrets = Arc::new(Vec::new());
     let mut entries: Vec<Entries> = vec![empty_entries.clone(); n];
@@ -193,10 +170,9 @@ pub fn build(
         };
     }
 
-    // 2. Add/remove events and locations.
     let n_secrets = secrets.len();
     let mut adds: Vec<Vec<u32>> = vec![Vec::new(); n_secrets];
-    let mut removes: Vec<Vec<(u32, u32)>> = vec![Vec::new(); n_secrets]; // (commit, parent)
+    let mut removes: Vec<Vec<(u32, u32)>> = vec![Vec::new(); n_secrets];
     let mut locations: Vec<BTreeSet<(u32, u32, u32)>> = vec![BTreeSet::new(); n_secrets];
     for &c in &graph.topo {
         let ci = c as usize;
@@ -235,11 +211,9 @@ pub fn build(
         }
     }
 
-    // 3. Reachability helpers shared by all secrets.
     let head_ancestors = graph.head.map(|h| ancestors(graph, h));
     let order_key = |c: u32| (graph.commits[c as usize].time, graph.topo_pos[c as usize]);
 
-    // 4. Per-secret timelines (independent; parallel).
     let per_secret: Vec<Option<Timeline>> = (0..n_secrets)
         .into_par_iter()
         .map(|s| {
@@ -300,7 +274,6 @@ pub fn build(
         })
         .collect();
 
-    // 5. Resolve commits, paths and lines into findings.
     let mut findings = Vec::new();
     for t in per_secret.into_iter().flatten() {
         let Timeline {
@@ -321,7 +294,6 @@ pub fn build(
                     .any(|h| h.secret == secret_id)
             })
             .min_by_key(|&(path, _)| {
-                // Prefer a path the commit actually changed.
                 (
                     changes.binary_search_by_key(&path, |ch| ch.0).is_err(),
                     path,
@@ -349,7 +321,6 @@ pub fn build(
             event(graph, interned, c, path, None)
         });
 
-        // Still exposed while any ref tip holds it, even if HEAD's line removed it.
         let end = match (status, &removed) {
             (Status::RemovedButInHistory, Some(r)) => r.time,
             _ => now,
@@ -381,7 +352,6 @@ pub fn build(
     findings
 }
 
-/// Local and remote-tracking branches: refs that move, unlike tags.
 fn is_branch(name: &str) -> bool {
     name.starts_with("refs/heads/") || name.starts_with("refs/remotes/")
 }
@@ -402,7 +372,6 @@ fn path_string(interned: &Interned, path: u32) -> String {
     String::from_utf8_lossy(&interned.paths[path as usize]).into_owned()
 }
 
-/// Commits reachable from `start` (inclusive) via child edges.
 fn descendants(graph: &Graph, start: &[u32]) -> Vec<bool> {
     let mut seen = vec![false; graph.commits.len()];
     let mut queue: VecDeque<u32> = VecDeque::new();
@@ -423,7 +392,6 @@ fn descendants(graph: &Graph, start: &[u32]) -> Vec<bool> {
     seen
 }
 
-/// Commits reachable from `start` (inclusive) via parent edges.
 fn ancestors(graph: &Graph, start: u32) -> Vec<bool> {
     let mut seen = vec![false; graph.commits.len()];
     let mut stack = vec![start];

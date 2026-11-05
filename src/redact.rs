@@ -1,15 +1,8 @@
-//! Redaction and fingerprinting. Full secrets never leave this crate unless the
-//! caller explicitly opts in.
-
 use sha2::{Digest, Sha256};
 
-/// Characters kept in clear by [`redact`].
 pub const VISIBLE_PREFIX: usize = 4;
-/// Secrets shorter than this are fully masked, since a 4-char prefix would
-/// reveal most of them.
 pub const MIN_LEN_FOR_PREFIX: usize = 8;
 
-/// `abcdefgh...` -> `abcd****`; short secrets become `****`.
 pub fn redact(secret: &[u8]) -> String {
     let text = String::from_utf8_lossy(secret);
     if text.chars().count() < MIN_LEN_FOR_PREFIX {
@@ -19,7 +12,6 @@ pub fn redact(secret: &[u8]) -> String {
     format!("{prefix}****")
 }
 
-/// Hex SHA-256 of the raw secret bytes; stable identity for a secret.
 pub fn fingerprint(secret: &[u8]) -> String {
     hex::encode(Sha256::digest(secret))
 }

@@ -8,7 +8,6 @@ use swordfish_git::rules::RuleSet;
 use swordfish_git::scan::now_unix;
 use swordfish_git::{scan, ScanOptions, DEFAULT_MAX_BLOB_SIZE};
 
-/// Exit codes: 0 = no findings, 1 = findings, 2 = error.
 const EXIT_FINDINGS: u8 = 1;
 const EXIT_ERROR: u8 = 2;
 
@@ -26,29 +25,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Scan every commit reachable from any ref and report a timeline per secret
     Scan(ScanArgs),
 }
 
 #[derive(clap::Args)]
 struct ScanArgs {
-    /// Path inside the repository to scan
     #[arg(default_value = ".")]
     path: PathBuf,
 
-    /// Output format
     #[arg(long, value_enum, default_value_t = Format::Pretty)]
     format: Format,
 
-    /// Extra rules (gitleaks-compatible TOML subset) added to the built-in set
     #[arg(long, value_name = "FILE")]
     rules: Option<PathBuf>,
 
-    /// Skip blobs larger than N bytes
     #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_BLOB_SIZE)]
     max_blob_size: u64,
 
-    /// Print secrets in full instead of redacted (prints a warning)
     #[arg(long)]
     show_secrets: bool,
 }

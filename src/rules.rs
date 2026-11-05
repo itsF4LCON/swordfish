@@ -1,8 +1,3 @@
-//! Detection rules: a gitleaks-compatible TOML subset plus the built-in set.
-//!
-//! See ROADMAP.md §5 for the supported keys. Path filters are kept separate from
-//! content filters because blobs are scanned once, independent of their path.
-
 use std::path::Path;
 
 use regex::bytes::Regex;
@@ -32,14 +27,10 @@ pub enum RuleError {
     Invalid { id: String, message: String },
 }
 
-/// Which text an allowlist regex is matched against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegexTarget {
-    /// The extracted secret (gitleaks default).
     Secret,
-    /// The full regex match.
     Match,
-    /// The whole line containing the match.
     Line,
 }
 
@@ -48,12 +39,10 @@ pub struct Allowlist {
     pub regexes: Vec<Regex>,
     pub regex_target: RegexTarget,
     pub paths: Vec<Regex>,
-    /// Lower-cased; a secret containing any stopword is ignored.
     pub stopwords: Vec<String>,
 }
 
 impl Allowlist {
-    /// Content-side check (regexes and stopwords); paths are checked separately.
     pub fn allows_content(&self, secret: &[u8], full_match: &[u8], line: &[u8]) -> bool {
         let target = match self.regex_target {
             RegexTarget::Secret => secret,
@@ -85,15 +74,12 @@ pub struct Rule {
     pub regex: Regex,
     pub secret_group: Option<usize>,
     pub entropy: Option<f64>,
-    /// Lower-cased prefilter keywords. Empty means the regex always runs.
     pub keywords: Vec<String>,
-    /// If set, the rule only applies to paths matching this regex.
     pub path: Option<Regex>,
     pub allowlists: Vec<Allowlist>,
 }
 
 impl Rule {
-    /// Whether a hit of this rule may be reported at `path`.
     pub fn applies_to_path(&self, path: &[u8]) -> bool {
         if let Some(re) = &self.path {
             if !re.is_match(path) {
@@ -108,19 +94,15 @@ impl Rule {
 pub struct RuleSet {
     pub rules: Vec<Rule>,
     pub global: Vec<Allowlist>,
-    /// Non-fatal notes about unsupported keys, surfaced on stderr by the CLI.
     pub warnings: Vec<String>,
 }
 
 impl RuleSet {
-    /// The rules embedded in the binary.
     pub fn builtin() -> Self {
         Self::from_toml_str(BUILTIN_RULES, "built-in rules")
             .expect("built-in rules must always parse")
     }
 
-    /// Built-in rules extended with the rules in `path`. A loaded rule with the
-    /// same `id` as a built-in one replaces it in place.
     pub fn builtin_with_file(path: &Path) -> Result<Self, RuleError> {
         let text = std::fs::read_to_string(path).map_err(|source| RuleError::Io {
             path: path.display().to_string(),
@@ -227,7 +209,6 @@ impl RuleSet {
         })
     }
 
-    /// Whether `path` is excluded by a global path allowlist.
     pub fn path_globally_allowlisted(&self, path: &[u8]) -> bool {
         self.global.iter().any(|a| a.allows_path(path))
     }

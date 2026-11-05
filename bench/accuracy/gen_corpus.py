@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""Build the labeled accuracy corpus: a git repository full of fake secrets.
-
-    python3 -I bench/accuracy/gen_corpus.py <empty-dir> [--seed N]
-
-Writes the repository to <empty-dir>/repo and the ground truth to
-<empty-dir>/labels.json. Output is deterministic for a given seed (fixed
-dates, identities and RNG), so commit IDs are reproducible.
-
-Every "secret" is random data shaped like the provider's *published* token
-format. None of them is a real credential, and none is written down in this
-file: they are generated at run time so this repository never contains them.
-Formats come from provider documentation, not from swordfish's or gitleaks'
-rule regexes, so neither tool is graded against its own patterns.
-"""
 
 import argparse
 import base64
@@ -34,7 +20,6 @@ B32 = UPPER + "234567"
 B64 = UPPER + LOWER + DIGITS + "+/"
 B64URL = UPPER + LOWER + DIGITS + "-_"
 
-# 2024-01-08T09:00:00Z; one corpus "day" per commit keeps dates readable.
 T0 = 1_704_704_400
 DAY = 86_400
 
@@ -57,13 +42,9 @@ def b64url(data):
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
-# ---------------------------------------------------------------------------
-# Token formats (provider documentation / public format write-ups)
-# ---------------------------------------------------------------------------
 
 
 def github_classic(prefix):
-    # 30 random base62 chars + 6-char base62 CRC32 checksum (GitHub, 2021).
     body = rs(30)
     return f"{prefix}_{body}{b62(zlib.crc32(body.encode())).rjust(6, '0')}"
 
@@ -101,7 +82,6 @@ def password():
     return base64.b64encode(rng.randbytes(rng.choice([24, 32]))).decode()
 
 
-# family -> (generator, variable-name stem, whether it needs a keyword context)
 IN_SCOPE = {
     "aws-access-key-id": lambda: rng.choice(["AKIA", "ASIA"]) + rs(16, B32),
     "aws-secret-access-key": lambda: rs(40, B64),
@@ -163,9 +143,6 @@ def camel(name):
     return parts[0] + "".join(p.title() for p in parts[1:]) if len(parts) > 1 else name
 
 
-# ---------------------------------------------------------------------------
-# Contexts: how a value lands in a file. Each returns (path suffix, text).
-# ---------------------------------------------------------------------------
 
 
 def ctx_env(name, v):
@@ -217,12 +194,10 @@ def ctx_curl(name, v):
 
 
 def ctx_url(name, v):
-    # Credential inside a connection string: no `password=` assignment at all.
     return ".env", f"DATABASE_URL=postgres://app:{v}@db.internal:5432/app"
 
 
 def ctx_bare(name, v):
-    # Pasted in a comment with no variable name.
     return ".py", f"# temporary, remove before merge: {v}\nRETRIES = 3"
 
 
@@ -257,13 +232,9 @@ def ctx_yaml_block(name, v):
     return ".yaml", f"tls:\n  enabled: true\n  key: |\n{body}"
 
 
-# ---------------------------------------------------------------------------
-# Decoys: things that look like secrets but are not.
-# ---------------------------------------------------------------------------
 
 
 def decoys():
-    """(category, file suffix, text, value a tool would capture)."""
     out = []
     aws_id = "AKIA" + "IOSFODNN7" + "EXAMPLE"
     aws_secret = "wJalrXUtnFEMI/K7MDENG/" + "bPxRfiCYEXAMPLEKEY"
@@ -323,7 +294,6 @@ def decoys():
 
 
 def lockfiles():
-    """Lockfiles full of hashes. Not labeled individually: any finding is an FP."""
     pkgs = {}
     for i in range(40):
         name = f"pkg-{rs(6, LOWER)}"
@@ -340,9 +310,6 @@ def lockfiles():
     return {"web/package-lock.json": lock, "Cargo.lock": cargo, "go.sum": gosum}
 
 
-# ---------------------------------------------------------------------------
-# Filler: ordinary code and config, with the keywords scanners key on.
-# ---------------------------------------------------------------------------
 
 FILLER_LINES = [
     "PORT=8080", "LOG_LEVEL=info", "FEATURE_FLAGS=search,billing", "timeout: 30s", "retries: 3",
@@ -367,9 +334,6 @@ def filler_file(i):
     return f"src/mod{i:02d}/handler.{kind}", "\n".join(body) + "\n"
 
 
-# ---------------------------------------------------------------------------
-# Repository construction
-# ---------------------------------------------------------------------------
 
 
 class Repo:
@@ -407,7 +371,7 @@ class Repo:
         return self.git("rev-parse", "HEAD")
 
 
-SCENARIOS = [  # (scenario, share of in-scope positives)
+SCENARIOS = [
     ("live_in_head", 0.50), ("deleted_later", 0.25), ("side_branch_only", 0.10),
     ("tag_only", 0.05), ("merge_commit_only", 0.05), ("two_files", 0.05),
 ]
@@ -425,7 +389,7 @@ def main():
         sys.exit(f"{args.out} is not empty")
     rng.seed(args.seed)
 
-    items = []  # ground truth
+    items = []
 
     def new_item(kind, category, value, in_scope, scenario):
         item = {"id": f"{kind[0]}{len(items):04d}", "kind": kind, "category": category, "value": value,
@@ -441,12 +405,10 @@ def main():
         item["context"] = text.split(item["value"])[0][-40:].strip() or "(file start)"
         return rel, text
 
-    # Positives -----------------------------------------------------------
     scen_names = [s for s, _ in SCENARIOS]
     weights = [w for _, w in SCENARIOS]
     for family, gen in IN_SCOPE.items():
         for i in range(args.per_family):
-            # Spread scenarios evenly per family rather than leaving it to chance.
             scenario = scen_names[i % len(scen_names)] if i < len(scen_names) else rng.choices(scen_names, weights)[0]
             new_item("secret", family, gen(), True, scenario)
     for family, gen in OUT_OF_SCOPE.items():
@@ -461,14 +423,12 @@ def main():
     for item in items:
         placed[item["id"]] = placement(item, item["category"])
 
-    # Decoys ---------------------------------------------------------------
     decoy_files = []
     for cat, suffix, text, value in decoys():
         item = new_item("decoy", cat, value, None, "live_in_head")
         rel = f"{rng.choice(['docs', 'examples', 'tests/fixtures', 'web', 'config'])}/{cat}-{item['id']}{suffix}"
         decoy_files.append((item, rel, text))
 
-    # Build history ------------------------------------------------------
     repo = Repo(args.out / "repo")
     repo.write("README.md", "# billing platform\n\nInternal services.\n")
     for i in range(30):
@@ -486,7 +446,6 @@ def main():
         return [it for it in items if it["kind"] == "secret" and it["scenario"] == scenario]
 
     authors = ["Alice", "Bob", "Carol", "Dan"]
-    # live_in_head, deleted_later, two_files: committed on main in small batches.
     mainline = by("live_in_head") + by("deleted_later") + by("two_files")
     rng.shuffle(mainline)
     for b in range(0, len(mainline), 8):
@@ -504,7 +463,6 @@ def main():
         repo.remove(placed[item["id"]][0])
     repo.commit("remove secrets from config", author="Alice")
 
-    # tag_only: committed on a throwaway branch, tagged, branch deleted.
     repo.git("checkout", "-q", "-b", "release-candidate")
     for item in by("tag_only"):
         rel, text = placed[item["id"]]
@@ -515,7 +473,6 @@ def main():
     repo.git("checkout", "-q", "main")
     repo.git("branch", "-q", "-D", "release-candidate")
 
-    # side_branch_only: on an unmerged feature branch.
     repo.git("checkout", "-q", "-b", "feature/payments")
     for item in by("side_branch_only"):
         rel, text = placed[item["id"]]
@@ -524,8 +481,6 @@ def main():
     repo.commit("wip payments", author="Dan")
     repo.git("checkout", "-q", "main")
 
-    # merge_commit_only: content that appears only in a merge commit's tree
-    # (an "evil merge": neither parent has it).
     repo.git("checkout", "-q", "-b", "feature/search")
     repo.write("src/search/README.md", "search service\n")
     repo.commit("search scaffold", author="Bob")
@@ -542,7 +497,6 @@ def main():
     repo.git("commit", "-q", "-m", "Merge branch 'feature/search'", author="Bob")
     repo.git("branch", "-q", "-D", "feature/search")
 
-    # Edge cases ------------------------------------------------------------
     for item in by("binary_blob"):
         rel = f"assets/blob-{item['id']}.bin"
         repo.write(rel, b"\x00\x01\x02SQLite format 3\x00" + rng.randbytes(64) + item["value"].encode() + b"\x00" * 16)
@@ -557,7 +511,6 @@ def main():
         item["paths"].append(rel)
     repo.commit("add data exports and assets", author="Carol")
 
-    # unreachable_commit: committed, then reset away. Only the reflog has it.
     for item in by("unreachable_commit"):
         rel, text = placed[item["id"]]
         repo.write(rel, text)

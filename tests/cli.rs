@@ -1,5 +1,3 @@
-//! End-to-end CLI behaviour: exit codes, redaction, formats.
-
 mod common;
 
 use assert_cmd::Command;
@@ -146,7 +144,6 @@ fn scan_does_not_modify_the_repository() {
     assert_eq!(before, snapshot(fx.path()));
 }
 
-/// (relative path, length, mtime) of every file under `root`.
 fn snapshot(root: &std::path::Path) -> Vec<(String, u64, std::time::SystemTime)> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];

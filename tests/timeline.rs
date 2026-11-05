@@ -1,5 +1,3 @@
-//! Exact timeline assertions on fixture repositories built with gix.
-
 mod common;
 
 use common::*;
@@ -14,7 +12,7 @@ const NOW: i64 = T0 + 100 * DAY;
 fn secret_lifecycle_tags_binary_and_deleted_branch() {
     let fx = Fixture::new();
     let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
-    png.extend_from_slice(stripe_key().as_bytes()); // must stay invisible: binary
+    png.extend_from_slice(stripe_key().as_bytes());
     let env = format!("# prod\nDEBUG=false\nAWS_ACCESS_KEY_ID={}\n", aws_key());
     let app = format!("import os\nTOKEN = \"{}\"\n", github_token());
 
@@ -42,7 +40,6 @@ fn secret_lifecycle_tags_binary_and_deleted_branch() {
         "Alice",
     );
 
-    // A branch holding a secret, created and then deleted without merging.
     let pay = format!("const key = '{}';\n", stripe_key());
     fx.commit(
         "refs/heads/feature",
@@ -114,14 +111,12 @@ fn secret_lifecycle_tags_binary_and_deleted_branch() {
     assert_eq!(gh["exposure_days"], 98.0);
     assert_eq!(gh["refs"], json!(["refs/heads/main"]));
 
-    // v0.1 only walks refs: the deleted branch's secret is not reported (v0.2 gap).
     assert!(report["findings"]
         .as_array()
         .unwrap()
         .iter()
         .all(|f| f["rule_id"] != "stripe-secret-key"));
 
-    // Findings are ordered by introduction date.
     assert_eq!(report["findings"][0]["rule_id"], "aws-access-key-id");
 
     let text = report.to_string();
@@ -210,7 +205,6 @@ fn rename_is_not_a_removal() {
         .map(|l| l["path"].as_str().unwrap())
         .collect();
     assert_eq!(paths, vec!["a/creds.txt", "b/creds.txt"]);
-    // Same content at both paths: one blob, scanned once.
     assert_eq!(f["locations"][0]["blob"], f["locations"][1]["blob"]);
 }
 
@@ -248,7 +242,6 @@ fn removed_from_head_but_kept_on_a_branch_is_live_on_other_ref() {
         T0,
         "Alice",
     );
-    // The release branch forks while the key is present and keeps it.
     fx.commit(
         "refs/heads/release",
         &[c1],
@@ -261,9 +254,7 @@ fn removed_from_head_but_kept_on_a_branch_is_live_on_other_ref() {
     let report = fx.json(NOW);
     let f = finding(&report, "aws-access-key-id");
     assert_eq!(f["status"], "live_on_other_ref");
-    // Removal on HEAD's line is still reported...
     assert_eq!(f["removed"]["commit"], c2.to_string());
-    // ...but exposure keeps counting while a ref tip still holds the key.
     assert_eq!(f["exposure_days"], 100.0);
     assert_eq!(f["refs"], json!(["refs/heads/main", "refs/heads/release"]));
 }
@@ -292,7 +283,6 @@ fn reintroduced_secret_keeps_first_introduction() {
     let report = fx.json(NOW);
     let f = finding(&report, "aws-access-key-id");
     assert_eq!(f["introduced"]["commit"], c1.to_string());
-    // First removal after the introduction on HEAD's line of history.
     assert_eq!(f["removed"]["commit"], c2.to_string());
     assert_eq!(f["exposure_days"], 3.0);
 }

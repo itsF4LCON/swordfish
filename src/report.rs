@@ -1,5 +1,3 @@
-//! Output: JSON schema v1 (see ROADMAP.md §4) and the pretty terminal view.
-
 use std::fmt::Write as _;
 
 use serde::Serialize;
@@ -181,7 +179,6 @@ fn display_secret(f: &Finding, show: bool) -> String {
     }
 }
 
-/// Unix seconds -> `YYYY-MM-DDTHH:MM:SSZ` (UTC).
 pub fn rfc3339(secs: i64) -> String {
     let (date, time) = split_utc(secs);
     format!("{date}T{time}Z")
@@ -197,7 +194,6 @@ fn split_utc(secs: i64) -> (String, String) {
     )
 }
 
-/// Howard Hinnant's days-to-civil algorithm (proleptic Gregorian).
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = z.div_euclid(146_097);
@@ -211,7 +207,6 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// ANSI styling that collapses to nothing when colour is off.
 struct Style {
     on: bool,
 }
@@ -245,10 +240,8 @@ impl Style {
 }
 
 const BAR_WIDTH: usize = 40;
-/// Refs/locations listed per finding in the pretty view; JSON always has all.
 const MAX_LISTED: usize = 5;
 
-/// `a, b, c … and 12 more`
 fn summarize(items: &[String], max: usize, st: &Style) -> String {
     if items.len() <= max {
         return items.join(", ");
@@ -263,7 +256,6 @@ fn summarize(items: &[String], max: usize, st: &Style) -> String {
     )
 }
 
-/// Human-readable terminal view of a report.
 pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, color: bool) -> String {
     let st = Style { on: color };
     let mut out = String::new();
@@ -429,7 +421,6 @@ pub fn render_pretty(report: &Report, history_start: Option<i64>, now: i64, colo
     out
 }
 
-/// Pretty view only; never part of the JSON output.
 fn sign_off(out: &mut String, st: &Style) {
     let _ = writeln!(out, "\n{}", st.dim("See you, space cowboy..."));
 }
@@ -438,12 +429,10 @@ fn label(name: &str) -> String {
     format!("{name:<10}")
 }
 
-/// `2024-01-02T10:00:00Z` -> `2024-01-02 10:00 UTC`
 fn human_date(rfc: &str) -> String {
     format!("{} {} UTC", &rfc[..10], &rfc[11..16])
 }
 
-/// `░░░░████████░░░░` over [first commit, now]; filled = exposure window.
 fn exposure_bar(history_start: i64, now: i64, f: &FindingJson, live: bool) -> String {
     let span = (now - history_start).max(1) as f64;
     let pos = |t: i64| -> usize {
@@ -460,7 +449,6 @@ fn exposure_bar(history_start: i64, now: i64, f: &FindingJson, live: bool) -> St
         .collect()
 }
 
-/// Inverse of [`rfc3339`] for the exact format it produces.
 fn parse_rfc3339(s: &str) -> i64 {
     let num = |r: std::ops::Range<usize>| s[r].parse::<i64>().unwrap_or(0);
     let (y, m, d) = (num(0..4), num(5..7), num(8..10));

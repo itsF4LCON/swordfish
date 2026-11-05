@@ -1,6 +1,3 @@
-//! Shannon entropy, used to reject low-randomness regex candidates.
-
-/// Shannon entropy of `data` in bits per byte (0.0 for empty input, max 8.0).
 pub fn shannon(data: &[u8]) -> f64 {
     if data.is_empty() {
         return 0.0;
@@ -39,7 +36,6 @@ mod tests {
         assert!(approx(shannon(b"ab"), 1.0));
         assert!(approx(shannon(b"abcd"), 2.0));
         assert!(approx(shannon(b"aabb"), 1.0));
-        // 16 distinct symbols, each once: log2(16).
         assert!(approx(shannon(b"0123456789abcdef"), 4.0));
         let all: Vec<u8> = (0..=255).collect();
         assert!(approx(shannon(&all), 8.0));

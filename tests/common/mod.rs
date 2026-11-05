@@ -1,5 +1,4 @@
-//! Fixture repositories built at test time with gix (no `git` binary needed).
-#![allow(dead_code)] // each test crate uses a different subset
+#![allow(dead_code)]
 
 use std::path::Path;
 
@@ -11,11 +10,8 @@ use swordfish_git::rules::RuleSet;
 use swordfish_git::{ScanOptions, ScanResult, DEFAULT_MAX_BLOB_SIZE};
 
 pub const DAY: i64 = 86_400;
-/// 2024-01-02T10:00:00Z
 pub const T0: i64 = 1_704_189_600;
 
-// Secrets are assembled at runtime so this repository never contains them
-// verbatim (keeps swordfish, gitleaks and push protection quiet on ourselves).
 pub fn aws_key() -> String {
     format!("{}{}", "AKIA", "Z7Q3VXN2LMP4RT6Y")
 }
@@ -32,12 +28,9 @@ pub struct Fixture {
 }
 
 impl Fixture {
-    /// A fresh repository whose HEAD points at `refs/heads/main`.
     pub fn new() -> Self {
         let dir = tempfile::tempdir().expect("tempdir");
         gix::init(dir.path()).expect("init");
-        // gix honours init.defaultBranch from system config (Git for Windows
-        // sets master), so pin HEAD for deterministic ref names.
         std::fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/main\n").expect("HEAD");
         let repo = gix::open(dir.path()).expect("open");
         Fixture { dir, repo }
@@ -47,7 +40,6 @@ impl Fixture {
         self.dir.path()
     }
 
-    /// Commit a full snapshot of `files` to `reference` (created or advanced).
     pub fn commit(
         &self,
         reference: &str,
@@ -118,7 +110,6 @@ impl Fixture {
         self.scan_with(RuleSet::builtin(), DEFAULT_MAX_BLOB_SIZE, now)
     }
 
-    /// JSON report (schema v1) as a value, secrets redacted.
     pub fn json(&self, now: i64) -> serde_json::Value {
         json_of(&self.scan(now), now)
     }

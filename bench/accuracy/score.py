@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""Score swordfish and gitleaks findings against the corpus ground truth.
-
-    python3 -I bench/accuracy/score.py LABELS SWORDFISH_JSON GITLEAKS_JSON \
-        [--meta KEY=VALUE ...] [--details]
-
-Prints the results as Markdown. `--details` adds every false positive
-(redacted) to stderr for manual review.
-
-Scoring unit: one unique secret value per tool. gitleaks reports one row per
-commit that adds a secret, swordfish one row per secret, so both are reduced
-to unique values first. A finding matches a label when one contains the other
-after removing whitespace and literal `\\n` (private keys are reported as
-blocks and may be escaped in JSON or indented in YAML). A finding that is a
-shorter piece of a labeled secret (at least 8 characters) is a *partial*
-match: it still points at the leak, but does not capture all of it.
-"""
 
 import argparse
 import json
@@ -63,7 +47,6 @@ def redact(s):
 
 
 def load(tool, path):
-    """Unique secret value -> {rules, paths}."""
     data = json.load(open(path))
     out = defaultdict(lambda: {"rules": set(), "paths": set()})
     if tool == "swordfish":
@@ -81,7 +64,6 @@ def load(tool, path):
 
 
 def classify(value, items):
-    """Return (matches, kind): matches is a list of (item, 'full'|'partial')."""
     v = norm(value)
     secrets, decoys = [], []
     for it in items:
@@ -126,12 +108,12 @@ def main():
     decoys = [i for i in items if i["kind"] == "decoy"]
     tools = {"swordfish": load("swordfish", args.swordfish), "gitleaks": load("gitleaks", args.gitleaks)}
 
-    found = {}       # tool -> item id -> best match ('full' beats 'partial')
-    caught_by = {}   # tool -> item id -> set of rule ids
-    flagged = {}     # tool -> decoy id -> True
-    fstats = {}      # tool -> Counter of finding classes
-    fam_tp_fp = {}   # tool -> family -> Counter(tp, fp)
-    fps = {}         # tool -> list of false positives
+    found = {}
+    caught_by = {}
+    flagged = {}
+    fstats = {}
+    fam_tp_fp = {}
+    fps = {}
     for tool, findings in tools.items():
         found[tool], caught_by[tool], flagged[tool] = {}, defaultdict(set), {}
         fstats[tool], fam_tp_fp[tool], fps[tool] = Counter(), defaultdict(Counter), []
